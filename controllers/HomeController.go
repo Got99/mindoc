@@ -1,3 +1,5 @@
+// HomeController.go 负责首页相关请求。
+// 它通常承担系统首页、默认入口页和部分公共展示页的渲染逻辑。
 package controllers
 
 import (

@@ -1,3 +1,5 @@
+// command.go 是 MinDoc 的启动装配核心。
+// 它负责解析命令行参数、加载配置、初始化数据库/缓存/日志/模型，并注册模板函数、错误处理和热加载逻辑。
 package commands
 
 import (
@@ -31,6 +33,48 @@ import (
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils/filetil"
 )
+
+func isProjectWorkingDirectory(dir string) bool {
+	if dir == "" {
+		return false
+	}
+
+	if !filetil.FileExists(filepath.Join(dir, "static", "fonts")) {
+		return false
+	}
+	if !filetil.FileExists(filepath.Join(dir, "views")) {
+		return false
+	}
+
+	return filetil.FileExists(filepath.Join(dir, "conf", "app.conf")) ||
+		filetil.FileExists(filepath.Join(dir, "conf", "app.conf.example"))
+}
+
+func detectWorkingDirectory() string {
+	var candidates []string
+
+	if p, err := filepath.Abs(os.Args[0]); err == nil {
+		candidates = append(candidates, filepath.Dir(p))
+	}
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, wd)
+	}
+
+	for _, dir := range candidates {
+		if isProjectWorkingDirectory(dir) {
+			return dir
+		}
+	}
+
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	if p, err := filepath.Abs(os.Args[0]); err == nil {
+		return filepath.Dir(p)
+	}
+
+	return conf.WorkingDirectory
+}
 
 // RegisterDataBase 注册数据库
 func RegisterDataBase() {
@@ -369,13 +413,21 @@ func ResolveCommand(args []string) {
 		log.Fatal("解析命令失败 ->", err)
 	}
 
-	if conf.WorkingDirectory == "" {
-		if p, err := filepath.Abs(os.Args[0]); err == nil {
-			conf.WorkingDirectory = filepath.Dir(p)
+	var dirSpecified, configSpecified bool
+	flagSet.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "dir":
+			dirSpecified = true
+		case "config":
+			configSpecified = true
 		}
+	})
+
+	if !dirSpecified {
+		conf.WorkingDirectory = detectWorkingDirectory()
 	}
 
-	if conf.ConfigurationFile == "" {
+	if !configSpecified {
 		conf.ConfigurationFile = conf.WorkingDir("conf", "app.conf")
 		config := conf.WorkingDir("conf", "app.conf.example")
 		if !filetil.FileExists(conf.ConfigurationFile) && filetil.FileExists(config) {
@@ -602,6 +654,7 @@ func RegisterError() {
 }
 
 func init() {
+	conf.WorkingDirectory = detectWorkingDirectory()
 
 	if configPath, err := filepath.Abs(conf.ConfigurationFile); err == nil {
 		conf.ConfigurationFile = configPath
@@ -610,8 +663,4 @@ func init() {
 		log.Fatal("读取字体文件失败 ->", err)
 	}
 	gob.Register(models.Member{})
-
-	if p, err := filepath.Abs(os.Args[0]); err == nil {
-		conf.WorkingDirectory = filepath.Dir(p)
-	}
 }

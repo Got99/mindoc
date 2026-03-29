@@ -1,3 +1,5 @@
+// cache.go 是对 Beego Cache 的一层统一封装。
+// 它通过 gob 编解码保存复杂对象，为文档缓存、第三方登录 Token 缓存等场景提供统一访问接口。
 package cache
 
 import (

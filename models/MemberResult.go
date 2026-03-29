@@ -1,3 +1,5 @@
+// MemberResult.go 提供用户展示层需要的聚合结果结构。
+// 这类 Result 模型通常用于列表页或接口返回，避免直接暴露底层表结构。
 package models
 
 import (

@@ -1,3 +1,5 @@
+// BaseController.go 定义了所有控制器共享的基础能力。
+// 它负责准备当前用户、系统设置、多语言、公共模板数据，并提供统一的 JSON 和错误页输出方法。
 package controllers
 
 import (

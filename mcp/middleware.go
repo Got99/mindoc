@@ -1,3 +1,5 @@
+// middleware.go 定义 MCP Server 使用的中间件。
+// 这里通常处理鉴权、请求上下文准备或统一访问控制。
 package mcp
 
 import (

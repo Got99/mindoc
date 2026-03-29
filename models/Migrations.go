@@ -1,3 +1,5 @@
+// Migrations.go 定义数据库迁移记录模型。
+// 该模型用来记录某次迁移是否执行过，从而避免升级流程重复运行相同脚本。
 package models
 
 import (

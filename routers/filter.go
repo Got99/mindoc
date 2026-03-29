@@ -1,3 +1,5 @@
+// filter.go 定义了全局请求过滤器。
+// 这里主要负责登录校验、MCP 认证、Session Cookie 合法性检查以及统一响应头注入。
 package routers
 
 import (
@@ -15,6 +17,9 @@ import (
 
 func init() {
 	var FilterUser = func(ctx *context.Context) {
+		if ctx.Request.URL.Path == "/api/blog/append" {
+			return
+		}
 		_, ok := ctx.Input.Session(conf.LoginSessionName).(models.Member)
 
 		if !ok {

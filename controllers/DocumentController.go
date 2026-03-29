@@ -1,3 +1,5 @@
+// DocumentController.go 负责文档读取、编辑、发布、历史、导出和附件等请求。
+// 它是 MinDoc 最核心的控制器之一，也是理解文档链路、缓存和权限判断的重要入口。
 package controllers
 
 import (

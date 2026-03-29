@@ -5,6 +5,12 @@
 
 MinDoc 是一款针对IT团队开发的简单好用的文档管理系统。
 
+## 开发入门
+
+如果你是第一次接手这个项目，可以先看代码理解文档：
+
+- [start.md](start.md)
+
 MinDoc 的前身是 [SmartWiki](https://github.com/lifei6671/SmartWiki) 文档系统。SmartWiki 是基于 PHP 框架 laravel 开发的一款文档管理系统。因 PHP 的部署对普通用户来说太复杂，所以改用 Golang 开发。可以方便用户部署和实用。
 
 开发缘起是公司IT部门需要一款简单实用的项目接口文档管理和分享的系统。其功能和界面源于 kancloud 。

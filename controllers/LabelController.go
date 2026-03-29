@@ -1,3 +1,5 @@
+// LabelController.go 负责标签相关页面和接口。
+// 它主要用于标签列表展示以及与项目标签筛选相关的业务处理。
 package controllers
 
 import (

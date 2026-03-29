@@ -1,3 +1,5 @@
+// BookModel.go 定义了项目（Book）模型及其主要业务操作。
+// 这里不只是 ORM 映射，还承担了创建项目、复制项目、更新项目和联动初始化文档等业务逻辑。
 package models
 
 import (

@@ -1,3 +1,5 @@
+// CommentController.go 负责评论的创建、删除和查询等交互。
+// 它是文档和博客评论能力的 HTTP 接入层。
 package controllers
 
 import (

@@ -1,3 +1,5 @@
+// install.go 负责 MinDoc 的初始化安装流程。
+// 这里会创建数据库结构、写入系统默认配置，并初始化管理员账户、默认项目和默认项目空间。
 package commands
 
 import (

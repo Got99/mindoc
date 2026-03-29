@@ -1,3 +1,5 @@
+// Relationship.go 定义了“用户与项目关系”模型。
+// 它是项目权限体系的基础数据来源之一，用于描述成员在指定项目里的角色和访问级别。
 package models
 
 import (

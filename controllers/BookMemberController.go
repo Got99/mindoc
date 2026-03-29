@@ -1,3 +1,5 @@
+// BookMemberController.go 负责项目成员的增删改。
+// 它把“项目成员关系”相关的单点操作从 BookController 中拆出来单独维护。
 package controllers
 
 import (

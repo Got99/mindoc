@@ -1,3 +1,5 @@
+// daemon.go 负责将 MinDoc 作为系统服务或守护进程运行。
+// 这里串联了命令解析、全局初始化、错误页注册以及最终的 Beego Web 服务启动。
 package daemon
 
 import (

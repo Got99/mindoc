@@ -1,3 +1,5 @@
+// router.go 是整个 Web 路由表。
+// 它把 URL 映射到具体控制器方法，并定义了文档、项目、管理后台、博客、评论和 MCP 等模块的入口。
 package routers
 
 import (
@@ -227,6 +229,8 @@ func init() {
 	web.Router("/blogs", &controllers.BlogController{}, "*:List")
 	web.Router("/blog-attach/:id:int/:attach_id:int", &controllers.BlogController{}, "get:Download")
 	web.Router("/blog-:id([0-9]+).html", &controllers.BlogController{}, "*:Index")
+	web.Router("/api/blog/append", &controllers.BlogController{}, "post:AppendContent")
+	web.Router("/api/blog/token/reset", &controllers.BlogController{}, "post:ResetAPIToken")
 
 	//模板相关接口
 	web.Router("/api/template/get", &controllers.TemplateController{}, "get:Get")

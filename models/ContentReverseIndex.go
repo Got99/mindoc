@@ -1,3 +1,5 @@
+// ContentReverseIndex.go 定义全文索引倒排结构。
+// 它服务于站内搜索，用于保存分词结果、词频和内容引用关系。
 package models
 
 import (

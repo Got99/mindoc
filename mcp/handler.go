@@ -1,3 +1,5 @@
+// handler.go 定义 MCP 请求处理逻辑。
+// 这里负责把 MCP 协议层请求转换成系统内部可以执行的业务调用。
 package mcp
 
 import (

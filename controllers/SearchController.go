@@ -1,3 +1,5 @@
+// SearchController.go 负责搜索相关请求。
+// 包括用户搜索、项目内搜索和与全文索引相关的检索入口。
 package controllers
 
 import (

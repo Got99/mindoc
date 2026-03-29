@@ -1,3 +1,5 @@
+// TemplateController.go 负责文档模板管理接口。
+// 用于获取、列出、新增和删除文档模板，供编辑器或项目快速复用内容。
 package controllers
 
 import (

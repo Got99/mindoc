@@ -1,3 +1,5 @@
+// BookController.go 负责项目（知识库）相关的 HTTP 入口。
+// 这里会处理项目列表、概览、设置、成员、团队、导入导出和权限操作等核心业务编排。
 package controllers
 
 import (

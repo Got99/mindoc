@@ -1,3 +1,5 @@
+// SettingController.go 负责当前登录用户的个人设置。
+// 主要包括个人资料、密码修改和头像上传等用户自助操作。
 package controllers
 
 import (

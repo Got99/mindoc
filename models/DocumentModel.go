@@ -1,3 +1,5 @@
+// DocumentModel.go 定义了文档模型和文档读写流程。
+// 它负责文档的创建、更新、缓存、发布、目录树、浏览计数和与项目的关联查询。
 package models
 
 import (

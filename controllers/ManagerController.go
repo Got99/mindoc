@@ -1,3 +1,5 @@
+// ManagerController.go 负责系统后台管理能力。
+// 这里主要处理用户管理、项目管理、评论管理、系统设置、标签管理和团队管理等后台页面与接口。
 package controllers
 
 import (

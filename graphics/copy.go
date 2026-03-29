@@ -1,3 +1,5 @@
+// copy.go 提供图形或文件复制相关的辅助函数。
+// 它主要被导出、上传或资源同步场景复用。
 package graphics
 
 import (

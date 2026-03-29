@@ -1,3 +1,5 @@
+// mcp.go 负责 MCP Server 的核心注册与入口组织。
+// 它把 MinDoc 的部分能力以 MCP 协议的形式暴露出来。
 package mcp
 
 import (

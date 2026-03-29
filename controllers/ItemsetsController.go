@@ -1,3 +1,5 @@
+// ItemsetsController.go 负责项目空间相关请求。
+// 项目空间是项目的分组维度，这里处理与空间展示和管理有关的入口。
 package controllers
 
 import (

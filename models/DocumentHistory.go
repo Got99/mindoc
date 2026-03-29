@@ -1,3 +1,5 @@
+// DocumentHistory.go 定义文档历史版本模型。
+// 这里负责保存文档修改快照、回滚所需数据以及与历史记录数量控制相关的逻辑。
 package models
 
 import (

@@ -1,6 +1,9 @@
+// BlogController.go 负责博客文章的管理与展示。
+// 这里既包含后台编辑入口，也包含前台列表、详情和附件下载等博客相关功能。
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,7 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/beego/beego/v2/client/orm"
 	"github.com/beego/beego/v2/core/logs"
 	"github.com/beego/beego/v2/server/web"
@@ -21,14 +26,147 @@ import (
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils"
 	"github.com/mindoc-org/mindoc/utils/pagination"
+	"github.com/russross/blackfriday/v2"
 )
 
 type BlogController struct {
 	BaseController
 }
 
+const blogTOCPlaceholder = "MINDOC_TOC_PLACEHOLDER"
+
+func generateBlogAPIToken() string {
+	return string(utils.Krand(conf.GetTokenSize(), utils.KC_RAND_KIND_ALL))
+}
+
+func buildBlogAppendAPIURL(baseURL, token string) string {
+	return strings.TrimSuffix(baseURL, "/") + "/api/blog/append?token=" + url.QueryEscape(token)
+}
+
+func prependBlogContent(current, appendContent string) string {
+	lines := strings.Split(current, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(line), "[TOC]") {
+			prefix := strings.Join(lines[:i+1], "\n")
+			suffix := strings.Join(lines[i+1:], "\n")
+			suffix = strings.TrimLeft(suffix, "\n")
+			if suffix == "" {
+				return prefix + "\n\n" + appendContent
+			}
+			return prefix + "\n\n" + appendContent + "\n\n" + suffix
+		}
+		break
+	}
+	return appendContent + "\n\n" + current
+}
+
+func normalizeBlogTOCMarkdown(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "[TOC]" || trimmed == "[TOCM]" {
+			lines[i] = blogTOCPlaceholder
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func buildBlogHeadingID(text string, used map[string]int) string {
+	var b strings.Builder
+	lastDash := false
+	for _, r := range strings.TrimSpace(text) {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(unicode.ToLower(r))
+			lastDash = false
+		case !lastDash:
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	id := strings.Trim(b.String(), "-")
+	if id == "" {
+		id = "section"
+	}
+	if count := used[id]; count > 0 {
+		used[id] = count + 1
+		return fmt.Sprintf("%s-%d", id, count+1)
+	}
+	used[id] = 1
+	return id
+}
+
+func buildBlogTOCHTML(root *goquery.Selection) string {
+	var toc strings.Builder
+	toc.WriteString(`<div class="markdown-toc editormd-markdown-toc"><ul class="markdown-toc-list">`)
+
+	usedIDs := make(map[string]int)
+	root.Find("h1, h2, h3, h4, h5, h6").Each(func(_ int, sel *goquery.Selection) {
+		title := strings.TrimSpace(sel.Text())
+		if title == "" {
+			return
+		}
+
+		id, ok := sel.Attr("id")
+		if !ok || strings.TrimSpace(id) == "" {
+			id = buildBlogHeadingID(title, usedIDs)
+			sel.SetAttr("id", id)
+		} else {
+			if count := usedIDs[id]; count > 0 {
+				id = fmt.Sprintf("%s-%d", id, count+1)
+				sel.SetAttr("id", id)
+				usedIDs[id] = count + 1
+			} else {
+				usedIDs[id] = 1
+			}
+		}
+
+		level := strings.TrimPrefix(goquery.NodeName(sel), "h")
+		toc.WriteString(`<li class="directory-item">`)
+		toc.WriteString(fmt.Sprintf(`<a class="directory-item-link directory-item-link-%s" href="#%s">%s</a>`, level, template.HTMLEscapeString(id), template.HTMLEscapeString(title)))
+		toc.WriteString(`</li>`)
+	})
+
+	toc.WriteString(`</ul></div>`)
+	return toc.String()
+}
+
+func renderBlogRelease(markdown string) string {
+	normalized := normalizeBlogTOCMarkdown(markdown)
+	rendered := string(blackfriday.Run([]byte(normalized)))
+
+	doc, err := goquery.NewDocumentFromReader(bytes.NewBufferString(`<div class="whole-article-wrap">` + rendered + `</div>`))
+	if err != nil {
+		return rendered
+	}
+
+	root := doc.Find("div.whole-article-wrap").First()
+	if root.Length() == 0 {
+		return rendered
+	}
+
+	tocHTML := buildBlogTOCHTML(root)
+	root.Find("p").Each(func(_ int, sel *goquery.Selection) {
+		if strings.TrimSpace(sel.Text()) == blogTOCPlaceholder {
+			sel.ReplaceWithHtml(tocHTML)
+		}
+	})
+
+	html, err := root.Html()
+	if err != nil {
+		return rendered
+	}
+	return html
+}
+
 func (c *BlogController) Prepare() {
 	c.BaseController.Prepare()
+	if c.Ctx != nil && c.Ctx.Request != nil && c.Ctx.Request.URL != nil && c.Ctx.Request.URL.Path == "/api/blog/append" {
+		return
+	}
 	if !c.EnableAnonymous && c.Member == nil {
 		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Ctx.Request.URL.RequestURI()), 302)
 	}
@@ -245,6 +383,9 @@ func (c *BlogController) ManageSetting() {
 		} else {
 			blog.BlogIdentify = blogIdentify
 		}
+		if blog.ApiToken == "" {
+			blog.ApiToken = generateBlogAPIToken()
+		}
 
 		blog.BlogTitle = blogTitle
 
@@ -277,9 +418,17 @@ func (c *BlogController) ManageSetting() {
 		if err != nil {
 			c.ShowErrorPage(500, err.Error())
 		}
+		if blog.ApiToken == "" {
+			blog.ApiToken = generateBlogAPIToken()
+			if saveErr := blog.Save("api_token", "modify_time", "version"); saveErr != nil {
+				logs.Error("generate blog api token failed -> ", saveErr)
+			}
+		}
+		c.Data["BlogAppendApiURL"] = buildBlogAppendAPIURL(c.BaseUrl(), blog.ApiToken)
 
 		c.Data["Model"] = blog
 	} else {
+		c.Data["BlogAppendApiURL"] = ""
 		c.Data["Model"] = models.NewBlog()
 	}
 }
@@ -399,6 +548,149 @@ func (c *BlogController) ManageEdit() {
 		c.Data["UploadFileSize"] = "undefined"
 	}
 	c.Data["Model"] = blog
+}
+
+// AppendContent 读取现有 Markdown 内容，追加新内容后同步生成 HTML。
+func (c *BlogController) AppendContent() {
+	c.BaseController.Prepare()
+
+	var req struct {
+		BlogID       int    `json:"blog_id"`
+		BlogIdentify string `json:"blog_identify"`
+		Content      string `json:"content"`
+		Position     string `json:"position"`
+	}
+
+	if len(c.Ctx.Input.RequestBody) > 0 && strings.Contains(strings.ToLower(c.Ctx.Input.Header("Content-Type")), "application/json") {
+		if err := json.Unmarshal(c.Ctx.Input.RequestBody, &req); err != nil {
+			c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
+		}
+	}
+
+	blogId, _ := c.GetInt("blog_id", req.BlogID)
+	blogIdentify := strings.TrimSpace(c.GetString("blog_identify", req.BlogIdentify))
+	appendContent := strings.TrimSpace(c.GetString("content", req.Content))
+	apiToken := strings.TrimSpace(c.GetString("token"))
+	position := strings.ToLower(strings.TrimSpace(c.GetString("position", req.Position)))
+
+	if blogId <= 0 && blogIdentify == "" {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
+	}
+	if appendContent == "" {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
+	}
+	if apiToken == "" {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
+	}
+	if position == "" {
+		position = "tail"
+	}
+	if position != "head" && position != "tail" {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
+	}
+
+	var (
+		blog *models.Blog
+		err  error
+	)
+
+	if blogId > 0 {
+		if apiToken != "" {
+			blog, err = models.NewBlog().Find(blogId)
+		} else if c.Member != nil && c.Member.IsAdministrator() {
+			blog, err = models.NewBlog().Find(blogId)
+		} else if c.Member != nil {
+			blog, err = models.NewBlog().FindByIdAndMemberId(blogId, c.Member.MemberId)
+		} else {
+			blog, err = models.NewBlog().Find(blogId)
+		}
+	} else {
+		blog, err = models.NewBlog().FindByIdentify(blogIdentify)
+		if err == nil && apiToken == "" && c.Member != nil && !c.Member.IsAdministrator() && blog.MemberId != c.Member.MemberId {
+			err = orm.ErrNoRows
+		}
+	}
+
+	if err != nil || blog == nil {
+		c.JsonResult(6002, i18n.Tr(c.Lang, "message.blog_not_exist"))
+	}
+	if blog.ApiToken == "" || apiToken != blog.ApiToken {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
+	}
+
+	if blog.BlogType == 1 {
+		c.JsonResult(6005, "linked blog is not supported")
+	}
+
+	current := strings.TrimSpace(blog.BlogContent)
+	if current == "" {
+		blog.BlogContent = appendContent
+	} else if position == "head" {
+		blog.BlogContent = prependBlogContent(current, appendContent)
+	} else {
+		blog.BlogContent = current + "\n\n" + appendContent
+	}
+
+	blog.BlogRelease = renderBlogRelease(blog.BlogContent)
+	if c.Member != nil {
+		blog.ModifyAt = c.Member.MemberId
+	}
+	blog.Modified = time.Now()
+
+	if err := blog.Save("blog_content", "blog_release", "modify_at", "modify_time", "version"); err != nil {
+		logs.Error("append blog content failed -> ", err)
+		c.JsonResult(6011, i18n.Tr(c.Lang, "message.failed"))
+	}
+
+	c.JsonResult(0, "ok", map[string]interface{}{
+		"blog_id":       blog.BlogId,
+		"blog_identify": blog.BlogIdentify,
+		"blog_content":  blog.BlogContent,
+		"blog_release":  blog.BlogRelease,
+		"version":       blog.Version,
+	})
+}
+
+// ResetAPIToken 重新生成博客 API Token。
+func (c *BlogController) ResetAPIToken() {
+	c.Prepare()
+
+	if c.Member == nil || c.Member.Role == conf.MemberReaderRole {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
+	}
+
+	blogId, _ := c.GetInt("blog_id", 0)
+	if blogId <= 0 {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
+	}
+
+	var (
+		blog *models.Blog
+		err  error
+	)
+	if c.Member.IsAdministrator() {
+		blog, err = models.NewBlog().Find(blogId)
+	} else {
+		blog, err = models.NewBlog().FindByIdAndMemberId(blogId, c.Member.MemberId)
+	}
+	if err != nil || blog == nil {
+		c.JsonResult(6002, i18n.Tr(c.Lang, "message.blog_not_exist"))
+	}
+
+	blog.ApiToken = generateBlogAPIToken()
+	blog.ModifyAt = c.Member.MemberId
+	blog.Modified = time.Now()
+
+	if err := blog.Save("api_token", "modify_at", "modify_time", "version"); err != nil {
+		logs.Error("reset blog api token failed -> ", err)
+		c.JsonResult(6011, i18n.Tr(c.Lang, "message.failed"))
+	}
+
+	c.JsonResult(0, "ok", map[string]interface{}{
+		"blog_id":        blog.BlogId,
+		"api_token":      blog.ApiToken,
+		"api_append_url": buildBlogAppendAPIURL(c.BaseUrl(), blog.ApiToken),
+	})
 }
 
 // 删除文章

@@ -1,3 +1,5 @@
+// main.go 是 MinDoc 的程序入口。
+// 这里负责识别命令行启动模式，并在命令模式、系统服务模式和普通 Web 服务模式之间做分发。
 package main
 
 import (
@@ -23,6 +25,7 @@ import (
 func isViaDaemonUnix() bool {
 	parentPid := os.Getppid()
 
+	// 通过父进程命令行判断当前进程是否由 mindoc-daemon 拉起。
 	cmdLineBytes, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", parentPid))
 	if err != nil {
 		return false
@@ -37,6 +40,7 @@ func isViaDaemonUnix() bool {
 
 func main() {
 
+	// service 子命令用于安装、卸载或重启系统服务。
 	if len(os.Args) >= 3 && os.Args[1] == "service" {
 		if os.Args[2] == "install" {
 			daemon.Install()
@@ -46,6 +50,8 @@ func main() {
 			daemon.Restart()
 		}
 	}
+
+	// 处理 install、update、version 等命令行模式；普通启动会继续往下走。
 	commands.RegisterCommand()
 
 	d := daemon.NewDaemon()
@@ -55,6 +61,8 @@ func main() {
 		utils.FixTimezone()
 	}
 
+	// 在 Unix 环境下，优先通过 kardianos/service 进入服务生命周期；
+	// 如果当前已经是由外部 daemon 拉起，或者运行在 Windows，则直接执行 d.Run()。
 	if runtime.GOOS != "windows" && !isViaDaemonUnix() {
 		s, err := service.New(d, d.Config())
 

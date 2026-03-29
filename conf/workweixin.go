@@ -1,3 +1,5 @@
+// workweixin.go 负责企业微信相关配置封装。
+// 它为企业微信登录或通知能力提供统一的配置读取入口。
 package conf
 
 import (

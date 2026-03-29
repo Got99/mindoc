@@ -1,3 +1,5 @@
+// smtp_test.go 用于验证邮件发送模块的核心行为。
+// 这些测试通常覆盖 SMTP 配置解析或消息发送相关的基础正确性。
 package mail
 
 import (

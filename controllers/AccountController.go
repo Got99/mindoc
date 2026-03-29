@@ -1,3 +1,5 @@
+// AccountController.go 负责账号体系相关请求。
+// 这里集中处理登录、登出、注册、找回密码以及企业微信、钉钉等第三方认证流程。
 package controllers
 
 import (
