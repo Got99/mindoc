@@ -11,15 +11,15 @@ ENV GOARCH=amd64
 ENV GOOS=linux
 
 # 复制源码并切换到工作目录
-ADD . /go/src/github.com/mindoc-org/mindoc
-WORKDIR /go/src/github.com/mindoc-org/mindoc
+COPY . /src
+WORKDIR /src
 
 # 输出当前 Go 环境，便于排查构建问题
 RUN go env
 # 拉取并整理依赖
 RUN go mod tidy -v
 # 编译 Linux AMD64 可执行文件，并写入版本信息
-RUN go build -v -o mindoc_linux_amd64 -ldflags "-w -s -X 'main.VERSION=$TAG' -X 'main.BUILD_TIME=`date`' -X 'main.GO_VERSION=`go version`'"
+RUN go build -v -o server -ldflags "-w -s -X 'github.com/mindoc-org/mindoc/conf.VERSION=$TAG' -X 'github.com/mindoc-org/mindoc/conf.BUILD_TIME=`date`' -X 'github.com/mindoc-org/mindoc/conf.GO_VERSION=`go version`'"
 # 为后续资源裁剪准备一个默认配置文件
 RUN cp conf/app.conf.example conf/app.conf
 # 清理运行时不需要的源码和 CI 文件，减小中间产物体积
@@ -27,11 +27,11 @@ RUN rm appveyor.yml docker-compose.yml Dockerfile .travis.yml .gitattributes .gi
 RUN rm -rf cache commands controllers converter .git .github graphics mail models routers utils
 
 # 验证编译出的程序可正常执行
-RUN ./mindoc_linux_amd64 version
+RUN ./server version
 
 # 复制运行时仍然需要的字体和启动脚本
 ADD simsun.ttc /usr/share/fonts/win/
-ADD start.sh /go/src/github.com/mindoc-org/mindoc
+COPY start.sh /src/start.sh
 
 
 # 第二阶段：基于 Ubuntu 组装最终运行镜像
@@ -40,19 +40,19 @@ FROM ubuntu:latest
 # 使用 bash 执行 RUN，便于复用 shell 语法
 SHELL ["/bin/bash", "-c"]
 
-WORKDIR /mindoc
+WORKDIR /app
 
 # 从构建阶段复制运行所需文件
 COPY --from=build /usr/share/fonts/win/simsun.ttc /usr/share/fonts/win/
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/mindoc_linux_amd64 /mindoc/
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/start.sh /mindoc/
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/LICENSE.md /mindoc/
+COPY --from=build /src/server /app/server
+COPY --from=build /src/start.sh /app/start.sh
+COPY --from=build /src/LICENSE.md /app/LICENSE.md
 # 从构建阶段复制静态资源和默认资产
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/lib /mindoc/lib
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/conf /mindoc/__default_assets__/conf
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/static /mindoc/__default_assets__/static
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/views /mindoc/__default_assets__/views
-COPY --from=build /go/src/github.com/mindoc-org/mindoc/uploads /mindoc/__default_assets__/uploads
+COPY --from=build /src/lib /app/lib
+COPY --from=build /src/conf /app/__default_assets__/conf
+COPY --from=build /src/static /app/__default_assets__/static
+COPY --from=build /src/views /app/__default_assets__/views
+COPY --from=build /src/uploads /app/__default_assets__/uploads
 
 # 让中文字体文件可被运行时读取
 RUN chmod a+r /usr/share/fonts/win/simsun.ttc
@@ -102,22 +102,22 @@ ENV PATH="/opt/calibre:$PATH" \
 RUN ebook-convert --version
 
 # 将配置、静态资源、上传文件、运行时数据和数据库声明为可挂载目录
-VOLUME ["/mindoc/conf","/mindoc/static","/mindoc/views","/mindoc/uploads","/mindoc/runtime","/mindoc/database"]
+VOLUME ["/app/conf","/app/static","/app/views","/app/uploads","/app/runtime","/app/database"]
 
 # 暴露 MinDoc 默认端口
 EXPOSE 8181/tcp
 
 # 指向项目内置时区数据，避免部分环境缺失 zoneinfo
-ENV ZONEINFO=/mindoc/lib/time/zoneinfo.zip
+ENV ZONEINFO=/app/lib/time/zoneinfo.zip
 # 确保启动脚本可执行
-RUN chmod +x /mindoc/start.sh
+RUN chmod +x /app/start.sh
 
 # 容器启动时执行自定义启动脚本
-ENTRYPOINT ["/bin/bash", "/mindoc/start.sh"]
+ENTRYPOINT ["/bin/bash", "/app/start.sh"]
 
 # https://docs.docker.com/engine/reference/commandline/build/#options
-# docker build --progress plain --rm --build-arg TAG=2.1 --tag gsw945/mindoc:2.1 .
+# docker build --platform linux/amd64 --progress plain --rm --build-arg TAG=1.0 --tag service-app:1.0 .
 # https://docs.docker.com/engine/reference/commandline/run/#options
 # set MINDOC=//d/mindoc # windows
 # export MINDOC=/home/ubuntu/mindoc-docker # linux
-# docker run -d --name=mindoc --restart=always -v /www/mindoc/uploads:/mindoc/uploads -v /www/mindoc/database:/mindoc/database  -v /www/mindoc/conf:/mindoc/conf  -e MINDOC_DB_ADAPTER=sqlite3 -e MINDOC_DB_DATABASE=./database/mindoc.db -e MINDOC_CACHE=true -e MINDOC_CACHE_PROVIDER=file -p 8181:8181 mindoc-org/mindoc:v2.1
+# docker run -d --name=service-app --restart=always -v /www/service-app/uploads:/app/uploads -v /www/service-app/database:/app/database -v /www/service-app/conf:/app/conf -e MINDOC_DB_ADAPTER=sqlite3 -e MINDOC_DB_DATABASE=./database/mindoc.db -e MINDOC_CACHE=true -e MINDOC_CACHE_PROVIDER=file -p 8181:8181 service-app:1.0

@@ -17,7 +17,7 @@ import (
 
 func init() {
 	var FilterUser = func(ctx *context.Context) {
-		if ctx.Request.URL.Path == "/api/blog/append" {
+		if ctx.Request.URL.Path == "/api/blog/append" || ctx.Request.URL.Path == "/api/v1/blog/content" {
 			return
 		}
 		_, ok := ctx.Input.Session(conf.LoginSessionName).(models.Member)

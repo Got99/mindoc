@@ -26,16 +26,23 @@ go run main.go
 go run main.go update 
 ```
 
-
+### 博客 Markdown 内容 API
 
 ```bash
-curl -X POST 'http://192.168.88.99:18181/api/blog/append?token=Pg79bIss25B9' \
+curl -sS -X POST \
+  'http://127.0.0.1:8181/api/v1/blog/content' \
+  -H 'Authorization: Bearer YOUR_BLOG_API_TOKEN' \
   -H 'Content-Type: application/json' \
-  -d '{
-    "blog_id": 1,
-     "position": "head",
-    "content": "\n## 20250329 \n版本1 \n 更新: 无可无不可"
+  --data-binary '{
+    "content": "## 标题\n追加内容",
+    "type": "add",
+    "position": "tail"
   }'
-
-
+```
+覆盖
+```
+{
+  "content": "## 全新的文档\n正文",
+  "type": "overwrite"
+}
 ```

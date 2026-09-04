@@ -230,6 +230,7 @@ func init() {
 	web.Router("/blog-attach/:id:int/:attach_id:int", &controllers.BlogController{}, "get:Download")
 	web.Router("/blog-:id([0-9]+).html", &controllers.BlogController{}, "*:Index")
 	web.Router("/api/blog/append", &controllers.BlogController{}, "post:AppendContent")
+	web.Router("/api/v1/blog/content", &controllers.BlogController{}, "post:AppendContent")
 	web.Router("/api/blog/token/reset", &controllers.BlogController{}, "post:ResetAPIToken")
 
 	//模板相关接口

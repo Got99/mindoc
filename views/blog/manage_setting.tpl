@@ -93,19 +93,23 @@
                             <textarea rows="3" class="form-control" name="excerpt" style="height: 90px" placeholder="{{i18n .Lang "blog.blog_digest"}}">{{.Model.BlogExcerpt}}</textarea>
                             <p class="text">{{i18n .Lang "message.blog_digest_tips"}}</p>
                         </div>
-                        <div class="form-group">
-                            <label>API URL</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="blogAppendApiURL" value="{{.BlogAppendApiURL}}" readonly>
-                                <span class="input-group-btn">
-                                    <button type="button" class="btn btn-default" id="btnCopyBlogApiURL">复制</button>
-                                </span>
-                            </div>
-                            <p class="text">这个 URL 已经包含 token。使用 POST 调用，JSON 里传 `blog_id` 或 `blog_identify`、`content`。</p>
-                        </div>
                         {{if gt .Model.BlogId 0}}
                         <div class="form-group">
-                            <button type="button" class="btn btn-default" id="btnResetBlogApiToken" data-loading-text="{{i18n .Lang "message.processing"}}">随机重置 Access Token</button>
+                            <label>Access Token</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="blogAppendApiToken" value="{{.BlogAppendAPIToken}}" readonly>
+                                <span class="input-group-btn">
+                                    <button type="button" class="btn btn-default" id="btnCopyBlogApiToken">复制 Token</button>
+                                    <button type="button" class="btn btn-default" id="btnResetBlogApiToken" data-loading-text="{{i18n .Lang "message.processing"}}">随机重置</button>
+                                </span>
+                            </div>
+                            <p class="text">Token 用于定位并授权访问当前文章，重置后旧 Token 会立即失效。</p>
+                        </div>
+                        <div class="form-group">
+                            <label>API 调用示例</label>
+                            <textarea class="form-control" id="blogAppendAPIExample" rows="10" style="font-family: monospace; resize: vertical;" readonly>{{.BlogAppendAPIExample}}</textarea>
+                            <button type="button" class="btn btn-default" id="btnCopyBlogApiExample" style="margin-top: 8px;">复制示例</button>
+                            <p class="text">type=add 时按 position（head/tail）添加，type=overwrite 时覆盖全文；type 默认 add，position 默认 tail。</p>
                         </div>
                         {{end}}
 
@@ -146,9 +150,6 @@
                 if($res.errcode === 0) {
                     showSuccess("{{i18n .Lang "message.success"}}");
                     $("#blogId").val($res.data.blog_id);
-                    if ($res.data.api_append_url) {
-                        $("#blogAppendApiURL").val($res.data.api_append_url);
-                    }
                     if (blogId === 0) {
                         // 优化新增文章后直接跳转到编辑页面
                         window.location.href = {{urlfor "BlogController.ManageEdit" ":id" "xxx"}}.replace("xxx", $res.data.blog_id)
@@ -177,17 +178,18 @@
                 $("#blogLinkDocument").hide();
             }
         });
-        $("#btnCopyBlogApiURL").on("click", async function () {
-            var url = $("#blogAppendApiURL").val();
-            if (!url) {
-                showError("API URL 为空");
+        async function copyBlogAPIValue(selector, emptyMessage) {
+            var $source = $(selector);
+            var value = $source.val();
+            if (!value) {
+                showError(emptyMessage);
                 return;
             }
             try {
-                await navigator.clipboard.writeText(url);
+                await navigator.clipboard.writeText(value);
                 showSuccess("复制成功");
             } catch (e) {
-                $("#blogAppendApiURL").trigger("focus").trigger("select");
+                $source.trigger("focus").trigger("select");
                 try {
                     document.execCommand("copy");
                     showSuccess("复制成功");
@@ -195,6 +197,12 @@
                     showError("复制失败，请手动复制");
                 }
             }
+        }
+        $("#btnCopyBlogApiToken").on("click", function () {
+            copyBlogAPIValue("#blogAppendApiToken", "Token 为空");
+        });
+        $("#btnCopyBlogApiExample").on("click", function () {
+            copyBlogAPIValue("#blogAppendAPIExample", "API 示例为空");
         });
         $("#btnResetBlogApiToken").on("click", function () {
             if (!blogId) {
@@ -204,8 +212,11 @@
             var $btn = $(this).button("loading");
             $.post(resetApiTokenURL, {blog_id: blogId}, function (res) {
                 if (res.errcode === 0) {
-                    if (res.data.api_append_url) {
-                        $("#blogAppendApiURL").val(res.data.api_append_url);
+                    if (res.data.api_token) {
+                        $("#blogAppendApiToken").val(res.data.api_token);
+                    }
+                    if (res.data.api_append_example) {
+                        $("#blogAppendAPIExample").val(res.data.api_append_example);
                     }
                     showSuccess("Token 已重置");
                 } else {

@@ -155,6 +155,18 @@ func (b *Blog) FindByIdentify(identify string) (*Blog, error) {
 	return b, nil
 }
 
+// FindByAPIToken 根据文章专属 API Token 查询文章。
+func (b *Blog) FindByAPIToken(apiToken string) (*Blog, error) {
+	o := orm.NewOrm()
+
+	err := o.QueryTable(b.TableNameWithPrefix()).Filter("api_token", apiToken).One(b)
+	if err != nil {
+		logs.Error("根据 API Token 查询文章时失败 -> ", err)
+		return nil, err
+	}
+	return b, nil
+}
+
 // 获取指定文章的链接内容
 func (b *Blog) Link() (*Blog, error) {
 	o := orm.NewOrm()

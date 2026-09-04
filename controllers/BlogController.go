@@ -33,14 +33,80 @@ type BlogController struct {
 	BaseController
 }
 
-const blogTOCPlaceholder = "MINDOC_TOC_PLACEHOLDER"
+const (
+	blogTOCPlaceholder   = "MINDOC_TOC_PLACEHOLDER"
+	blogAppendAPIV1Path  = "/api/v1/blog/content"
+	blogAppendLegacyPath = "/api/blog/append"
+)
+
+type blogAppendRequest struct {
+	BlogID       int    `json:"blog_id"`
+	BlogIdentify string `json:"blog_identify"`
+	Content      string `json:"content"`
+	Type         string `json:"type"`
+	Position     string `json:"position"`
+	Token        string `json:"token"`
+}
 
 func generateBlogAPIToken() string {
 	return string(utils.Krand(conf.GetTokenSize(), utils.KC_RAND_KIND_ALL))
 }
 
-func buildBlogAppendAPIURL(baseURL, token string) string {
-	return strings.TrimSuffix(baseURL, "/") + "/api/blog/append?token=" + url.QueryEscape(token)
+func buildBlogAppendAPIURL(baseURL string) string {
+	return strings.TrimSuffix(baseURL, "/") + blogAppendAPIV1Path
+}
+
+func shellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func buildBlogAppendAPIExample(baseURL, token string) string {
+	payload := "{\n" +
+		"  \"content\": \"## 标题\\n追加内容\",\n" +
+		"  \"type\": \"add\",\n" +
+		"  \"position\": \"tail\"\n" +
+		"}"
+	return fmt.Sprintf(
+		"curl -sS -X POST \\\n  %s \\\n  -H %s \\\n  -H %s \\\n  --data-binary %s",
+		shellSingleQuote(buildBlogAppendAPIURL(baseURL)),
+		shellSingleQuote("Authorization: Bearer "+token),
+		shellSingleQuote("Content-Type: application/json"),
+		shellSingleQuote(payload),
+	)
+}
+
+func isBlogAppendAPIPath(path string) bool {
+	return path == blogAppendAPIV1Path || path == blogAppendLegacyPath
+}
+
+func parseBlogAppendRequestBody(contentType string, body []byte) (blogAppendRequest, error) {
+	var req blogAppendRequest
+	if len(body) == 0 {
+		return req, nil
+	}
+
+	mediaType := strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
+	if mediaType == "application/json" || strings.HasSuffix(mediaType, "+json") {
+		if err := json.Unmarshal(body, &req); err != nil {
+			return req, err
+		}
+	}
+
+	return req, nil
+}
+
+func resolveBlogAppendAPIToken(paramToken, bodyToken, headerToken, authorization string) string {
+	for _, token := range []string{paramToken, bodyToken, headerToken} {
+		if token = strings.TrimSpace(token); token != "" {
+			return token
+		}
+	}
+
+	parts := strings.Fields(authorization)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return strings.TrimSpace(parts[1])
+	}
+	return ""
 }
 
 func prependBlogContent(current, appendContent string) string {
@@ -61,6 +127,16 @@ func prependBlogContent(current, appendContent string) string {
 		break
 	}
 	return appendContent + "\n\n" + current
+}
+
+func applyBlogContent(current, newContent, writeType, position string) string {
+	if writeType == "overwrite" || strings.TrimSpace(current) == "" {
+		return newContent
+	}
+	if position == "head" {
+		return prependBlogContent(strings.TrimSpace(current), newContent)
+	}
+	return strings.TrimSpace(current) + "\n\n" + newContent
 }
 
 func normalizeBlogTOCMarkdown(markdown string) string {
@@ -164,7 +240,7 @@ func renderBlogRelease(markdown string) string {
 
 func (c *BlogController) Prepare() {
 	c.BaseController.Prepare()
-	if c.Ctx != nil && c.Ctx.Request != nil && c.Ctx.Request.URL != nil && c.Ctx.Request.URL.Path == "/api/blog/append" {
+	if c.Ctx != nil && c.Ctx.Request != nil && c.Ctx.Request.URL != nil && isBlogAppendAPIPath(c.Ctx.Request.URL.Path) {
 		return
 	}
 	if !c.EnableAnonymous && c.Member == nil {
@@ -424,11 +500,15 @@ func (c *BlogController) ManageSetting() {
 				logs.Error("generate blog api token failed -> ", saveErr)
 			}
 		}
-		c.Data["BlogAppendApiURL"] = buildBlogAppendAPIURL(c.BaseUrl(), blog.ApiToken)
+		c.Data["BlogAppendAPIToken"] = blog.ApiToken
+		c.Data["BlogAppendAPIURL"] = buildBlogAppendAPIURL(c.BaseUrl())
+		c.Data["BlogAppendAPIExample"] = buildBlogAppendAPIExample(c.BaseUrl(), blog.ApiToken)
 
 		c.Data["Model"] = blog
 	} else {
-		c.Data["BlogAppendApiURL"] = ""
+		c.Data["BlogAppendAPIToken"] = ""
+		c.Data["BlogAppendAPIURL"] = buildBlogAppendAPIURL(c.BaseUrl())
+		c.Data["BlogAppendAPIExample"] = ""
 		c.Data["Model"] = models.NewBlog()
 	}
 }
@@ -553,46 +633,58 @@ func (c *BlogController) ManageEdit() {
 // AppendContent 读取现有 Markdown 内容，追加新内容后同步生成 HTML。
 func (c *BlogController) AppendContent() {
 	c.BaseController.Prepare()
-
-	var req struct {
-		BlogID       int    `json:"blog_id"`
-		BlogIdentify string `json:"blog_identify"`
-		Content      string `json:"content"`
-		Position     string `json:"position"`
+	isV1 := c.Ctx != nil && c.Ctx.Request != nil && c.Ctx.Request.URL != nil && c.Ctx.Request.URL.Path == blogAppendAPIV1Path
+	contentType := strings.ToLower(c.Ctx.Input.Header("Content-Type"))
+	if isV1 && !strings.Contains(contentType, "application/json") {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
 
-	if len(c.Ctx.Input.RequestBody) > 0 && strings.Contains(strings.ToLower(c.Ctx.Input.Header("Content-Type")), "application/json") {
-		if err := json.Unmarshal(c.Ctx.Input.RequestBody, &req); err != nil {
-			c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
-		}
+	req, err := parseBlogAppendRequestBody(contentType, c.Ctx.Input.RequestBody)
+	if err != nil {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
 
 	blogId, _ := c.GetInt("blog_id", req.BlogID)
 	blogIdentify := strings.TrimSpace(c.GetString("blog_identify", req.BlogIdentify))
 	appendContent := strings.TrimSpace(c.GetString("content", req.Content))
-	apiToken := strings.TrimSpace(c.GetString("token"))
+	apiToken := resolveBlogAppendAPIToken(
+		c.GetString("token"),
+		req.Token,
+		c.Ctx.Input.Header("X-API-Token"),
+		c.Ctx.Input.Header("Authorization"),
+	)
+	if isV1 {
+		blogId = 0
+		blogIdentify = ""
+		apiToken = resolveBlogAppendAPIToken("", "", "", c.Ctx.Input.Header("Authorization"))
+	}
+	writeType := strings.ToLower(strings.TrimSpace(c.GetString("type", req.Type)))
 	position := strings.ToLower(strings.TrimSpace(c.GetString("position", req.Position)))
 
-	if blogId <= 0 && blogIdentify == "" {
-		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
-	}
 	if appendContent == "" {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
 	if apiToken == "" {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
 	}
-	if position == "" {
-		position = "tail"
+	if writeType == "" {
+		writeType = "add"
 	}
-	if position != "head" && position != "tail" {
+	if writeType != "add" && writeType != "overwrite" {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
+	if writeType == "add" {
+		if position == "" {
+			position = "tail"
+		}
+		if position != "head" && position != "tail" {
+			c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
+		}
+	} else {
+		position = ""
+	}
 
-	var (
-		blog *models.Blog
-		err  error
-	)
+	var blog *models.Blog
 
 	if blogId > 0 {
 		if apiToken != "" {
@@ -604,11 +696,13 @@ func (c *BlogController) AppendContent() {
 		} else {
 			blog, err = models.NewBlog().Find(blogId)
 		}
-	} else {
+	} else if blogIdentify != "" {
 		blog, err = models.NewBlog().FindByIdentify(blogIdentify)
 		if err == nil && apiToken == "" && c.Member != nil && !c.Member.IsAdministrator() && blog.MemberId != c.Member.MemberId {
 			err = orm.ErrNoRows
 		}
+	} else {
+		blog, err = models.NewBlog().FindByAPIToken(apiToken)
 	}
 
 	if err != nil || blog == nil {
@@ -622,14 +716,7 @@ func (c *BlogController) AppendContent() {
 		c.JsonResult(6005, "linked blog is not supported")
 	}
 
-	current := strings.TrimSpace(blog.BlogContent)
-	if current == "" {
-		blog.BlogContent = appendContent
-	} else if position == "head" {
-		blog.BlogContent = prependBlogContent(current, appendContent)
-	} else {
-		blog.BlogContent = current + "\n\n" + appendContent
-	}
+	blog.BlogContent = applyBlogContent(blog.BlogContent, appendContent, writeType, position)
 
 	blog.BlogRelease = renderBlogRelease(blog.BlogContent)
 	if c.Member != nil {
@@ -642,13 +729,21 @@ func (c *BlogController) AppendContent() {
 		c.JsonResult(6011, i18n.Tr(c.Lang, "message.failed"))
 	}
 
-	c.JsonResult(0, "ok", map[string]interface{}{
+	result := map[string]interface{}{
 		"blog_id":       blog.BlogId,
 		"blog_identify": blog.BlogIdentify,
-		"blog_content":  blog.BlogContent,
-		"blog_release":  blog.BlogRelease,
+		"type":          writeType,
 		"version":       blog.Version,
-	})
+		"modified_at":   blog.Modified,
+	}
+	if writeType == "add" {
+		result["position"] = position
+	}
+	if !isV1 {
+		result["blog_content"] = blog.BlogContent
+		result["blog_release"] = blog.BlogRelease
+	}
+	c.JsonResult(0, "ok", result)
 }
 
 // ResetAPIToken 重新生成博客 API Token。
@@ -687,9 +782,10 @@ func (c *BlogController) ResetAPIToken() {
 	}
 
 	c.JsonResult(0, "ok", map[string]interface{}{
-		"blog_id":        blog.BlogId,
-		"api_token":      blog.ApiToken,
-		"api_append_url": buildBlogAppendAPIURL(c.BaseUrl(), blog.ApiToken),
+		"blog_id":            blog.BlogId,
+		"api_token":          blog.ApiToken,
+		"api_append_url":     buildBlogAppendAPIURL(c.BaseUrl()),
+		"api_append_example": buildBlogAppendAPIExample(c.BaseUrl(), blog.ApiToken),
 	})
 }
 
