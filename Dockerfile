@@ -1,5 +1,6 @@
 # 第一阶段：在 Go 构建环境中编译 MinDoc 二进制
-FROM golang:bookworm AS build
+# FROM golang:bookworm AS build
+FROM hub.gooting.top:5443/go/golang:bookworm AS build
 
 ARG TAG=0.0.1
 
