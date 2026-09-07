@@ -18,7 +18,7 @@ export MINDOC_DB_HOST=192.168.88.88
 export MINDOC_DB_PORT=3306
 export MINDOC_DB_DATABASE=mindoc
 export MINDOC_DB_USERNAME=root
-export MINDOC_DB_PASSWORD=*****
+export MINDOC_DB_PASSWORD=***** 
 export MINDOC_PORT=18181
 ```
 
