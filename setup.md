@@ -1,4 +1,16 @@
 ###  环境变量配置
+
+```sql
+CREATE DATABASE mindoc
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'mindoc'@'%' IDENTIFIED BY '请替换为强密码';
+GRANT ALL PRIVILEGES ON mindoc.* TO 'mindoc'@'%';
+
+FLUSH PRIVILEGES;
+```
+/
 ```bash
 # mindoc 
 export MINDOC_DB_ADAPTER=mysql
@@ -9,6 +21,9 @@ export MINDOC_DB_USERNAME=root
 export MINDOC_DB_PASSWORD=DeviSa@Sa
 export MINDOC_PORT=18181
 ```
+
+
+
 
 ### 启动安装 
 1. 会创建数据库

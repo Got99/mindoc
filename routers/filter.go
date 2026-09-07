@@ -16,6 +16,8 @@ import (
 )
 
 func init() {
+	web.InsertFilter("/*", web.BeforeStatic, FilterTrustedDomain)
+
 	var FilterUser = func(ctx *context.Context) {
 		if ctx.Request.URL.Path == "/api/blog/append" || ctx.Request.URL.Path == "/api/v1/blog/content" {
 			return

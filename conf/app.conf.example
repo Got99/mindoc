@@ -13,6 +13,12 @@ enable_iframe = "${MINDOC_ENABLE_IFRAME||false}"
 #系统完整URL(http://doc.iminho.me),如果该项不设置，会从请求头中获取地址。
 baseurl="${MINDOC_BASE_URL}"
 
+#可信访问域名，多个值使用英文逗号分隔。留空表示不限制。
+#只填写域名或 IP，不要包含 http(s):// 和路径；非默认端口需要显式填写。
+#例如：docs.example.com,docs.example.com:8443,[2001:db8::1]
+#Nginx 反向代理需要配置：proxy_set_header Host $http_host;
+trusted_domains="${MINDOC_TRUSTED_DOMAINS}"
+
 
 #########代码高亮样式################
 #样式演示地址：https://highlightjs.org/static/demo/

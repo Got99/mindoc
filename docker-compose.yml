@@ -22,6 +22,7 @@ services:
       - MINDOC_CACHE_PROVIDER=file
       - MINDOC_ENABLE_EXPORT=false
       - MINDOC_BASE_URL=
+      - MINDOC_TRUSTED_DOMAINS=
       - MINDOC_CDN_IMG_URL=
       - MINDOC_CDN_CSS_URL=
       - MINDOC_CDN_JS_URL=
